@@ -18,42 +18,55 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-PORT?=8080
+PORT?=8080			# using djangos default port
+path?=''		    # use an url path in project url.py
+APPS = $(sort $(dir $(wildcard */)))
+CFG_MK = $(sort $(wildcard ./*/config.mk))
+CFG_MK_RUN=$(CFG_MK:%=%.run)
+CFG_MK_BUILD=$(CFG_MK:%=%.build)
 
-path?=''
-
+# initialize the environment
 init:
+	git clone https://github.com/bennof/django.mk ./.django.mk
 	pipenv --three
 	pipenv install django
 	pipenv run django-admin startproject $(shell basename $(CURDIR)) .
 
+# run a python environment shell (not used)
 shell:
 	pipenv shell
 
-run: 
+run: $(CFG_MK_RUN)
 	pipenv run python manage.py makemigrations
 	pipenv run python manage.py migrate
 	pipenv run python manage.py runserver $(PORT)
 
-build:
+build: $(CFG_MK_BUILD)
+	@echo nothing to do
+
+install:
 	@echo nothing to do
 
 new: 
 	@test -n $(n) || echo "ERROR: no app name" && test -n $(n) 
 	pipenv run python manage.py startapp $(n)
 	echo "/^INSTALLED_APPS\na\n\t'$(n)',\n.\nwq\n" | ed $(shell basename $(CURDIR))/settings.py &> /dev/null
-	echo "/^]\ni\n\tpath($(path),include('$(n).urls')),\n.\nwq\n" | ed $(shell basename $(CURDIR))/urls.py &> /dev/null
-	echo "/^from django.urls.\nc\nfrom django.urls import path, include\n.\nwq\n" | ed $(shell basename $(CURDIR))/urls.py &> /dev/null
-	test -z $(t) || make -f .django.mk/tmpl/$(t).mk new n=$(n) 
-
-tt:
-	echo "/^]\ni\n\tpath($(path),include('$(n).urls')),\n.\nwq\n" | ed $(shell basename $(CURDIR))/urls.py 
+	test -z $(t) || make -f .django.mk/tmpl/$(t).mk new n=$(n) path=$(path)
 
 clean:
 	@echo nothing to do
 
 info:
 	@python --version
-	@pipenv run python -c "import django; print('Django '+django.get_version())"
-	@echo "Project $(shell basename $(CURDIR)) ($(CURDIR))"
+	@pipenv run python -c "import django; print('Django:  '+django.get_version())"
+	@echo "Project  $(shell basename $(CURDIR)) ($(CURDIR))"
+	@echo "APPS:    $(APPS)"
+	@echo "Build:   $(CFG_MK)"
 	
+.PHONEY: CFG_MK_RUN
+%/config.mk.run: %/config.mk
+	make -f $< run &
+	
+.PHONEY: CFG_MK_BUILD
+%/config.mk.build: %/config.mk
+	make -f $< build 
